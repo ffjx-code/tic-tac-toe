@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>井字棋 - 人机对战</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    user-select: none;
+}
+
+.container {
+    background: rgba(26, 26, 46, 0.9);
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(0, 230, 118, 0.15);
+}
+
+/* 菜单栏 */
+.menu-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(0, 230, 118, 0.2);
+    position: relative;
+}
+
+.menu-btn {
+    background: rgba(30, 30, 50, 0.8);
+    border: 1px solid rgba(0, 230, 118, 0.3);
+    color: #00e676;
+    padding: 6px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.menu-btn:hover { background: rgba(40, 40, 60, 0.9); border-color: #00e676; }
+
+.ai-info {
+    color: #ffd740;
+    font-size: 14px;
+    margin-left: auto;
+}
+
+.mode-indicator {
+    color: rgba(200, 200, 200, 0.7);
+    font-size: 13px;
+    background: rgba(0, 230, 118, 0.08);
+    border: 1px solid rgba(0, 230, 118, 0.15);
+    padding: 3px 10px;
+    border-radius: 4px;
+}
+
+/* 下拉菜单 */
+.dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: rgba(30, 30, 50, 0.95);
+    border: 1px solid rgba(80, 80, 100, 0.5);
+    border-radius: 8px;
+    padding: 4px;
+    min-width: 140px;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    display: none;
+}
+
+.dropdown.show { display: block; }
+
+.dropdown-item {
+    padding: 10px 16px;
+    color: #ddd;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: all 0.15s;
+}
+
+.dropdown-item:hover { background: rgba(40, 50, 70, 0.8); color: #fff; }
+
+/* 棋盘 */
+.board {
+    display: grid;
+    grid-template-columns: repeat(3, 110px);
+    grid-template-rows: repeat(3, 110px);
+    gap: 3px;
+    background: rgba(55, 71, 79, 0.3);
+    border-radius: 12px;
+    padding: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+.board-bg {
+    position: absolute;
+    top: 3px; left: 3px;
+    right: 3px; bottom: 3px;
+    background-size: cover;
+    background-position: center;
+    border-radius: 9px;
+    z-index: 0;
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.cell {
+    background: rgba(55, 71, 79, 0.2);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+}
+
+.cell:hover:not(.taken):not(.game-over) {
+    background: rgba(69, 90, 100, 0.4);
+}
+
+.cell.taken, .cell.game-over { cursor: default; }
+
+/* X 和 O 的 SVG 绘制 */
+.x-mark, .o-mark {
+    width: 60%;
+    height: 60%;
+}
+
+.x-mark { stroke: #00e676; stroke-width: 5; stroke-linecap: round; fill: none; }
+.o-mark { stroke: #ff5252; stroke-width: 5; stroke-linecap: round; fill: none; }
+
+/* 胜利连线 */
+.win-line {
+    position: absolute;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* 状态栏 */
+.status-bar {
+    text-align: center;
+    margin-top: 18px;
+    font-size: 18px;
+    font-weight: bold;
+    min-height: 30px;
+}
+
+.status-bar .green { color: #00e676; }
+.status-bar .red { color: #ff5252; }
+.status-bar .gold { color: #ffd740; }
+
+/* AI 强度设置弹窗 */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 200;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-overlay.show { display: flex; }
+
+.modal {
+    background: #1a1a2e;
+    border-radius: 16px;
+    padding: 30px 35px 25px;
+    width: 320px;
+    border: 1px solid rgba(0, 230, 118, 0.2);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.modal h2 {
+    color: #00e676;
+    text-align: center;
+    font-size: 22px;
+    margin-bottom: 8px;
+}
+
+.modal .current-value {
+    text-align: center;
+    color: #ffd740;
+    font-size: 36px;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+
+.slider-container {
+    position: relative;
+    height: 40px;
+    margin-bottom: 8px;
+}
+
+.slider-track {
+    position: absolute;
+    top: 50%;
+    left: 10px;
+    right: 10px;
+    height: 6px;
+    background: rgba(80, 80, 100, 0.5);
+    border-radius: 3px;
+    transform: translateY(-50%);
+}
+
+.slider-fill {
+    height: 100%;
+    background: #00e676;
+    border-radius: 3px;
+    transition: width 0.05s;
+}
+
+.slider-thumb {
+    position: absolute;
+    top: 50%;
+    width: 24px;
+    height: 24px;
+    background: #00e676;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    box-shadow: 0 2px 8px rgba(0, 230, 118, 0.4);
+    transition: box-shadow 0.2s;
+}
+
+.slider-thumb:active { cursor: grabbing; box-shadow: 0 2px 12px rgba(0, 230, 118, 0.6); }
+
+.slider-labels {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 10px;
+    color: rgba(150, 150, 150, 0.7);
+    font-size: 13px;
+}
+
+.slider-desc {
+    text-align: center;
+    color: rgba(200, 200, 200, 0.6);
+    font-size: 13px;
+    margin-top: 10px;
+    min-height: 20px;
+}
+
+.modal-close-btn {
+    display: block;
+    margin: 16px auto 0;
+    background: rgba(0, 230, 118, 0.15);
+    border: 1px solid rgba(0, 230, 118, 0.3);
+    color: #00e676;
+    padding: 8px 30px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.modal-close-btn:hover { background: rgba(0, 230, 118, 0.25); }
+
+/* 背景图片上传 */
+.bg-upload {
+    display: none;
+}
+
+/* 响应式 */
+@media (max-width: 420px) {
+    .container { padding: 16px; border-radius: 12px; }
+    .board { grid-template-columns: repeat(3, 90px); grid-template-rows: repeat(3, 90px); }
+    .modal { width: 280px; padding: 20px; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 菜单栏 -->
+    <div class="menu-bar">
+        <button class="menu-btn" id="menuBtn">菜单</button>
+        <span class="mode-indicator" id="modeIndicator">🤖 人机</span>
+        <span class="ai-info" id="aiInfo">AI: 9</span>
+        <div class="dropdown" id="dropdown">
+            <div class="dropdown-item" data-action="mode">切换模式</div>
+            <div class="dropdown-item" data-action="ai">AI 强度</div>
+            <div class="dropdown-item" data-action="bg">更换背景</div>
+        </div>
+    </div>
+
+    <!-- 棋盘 -->
+    <div class="board" id="board"></div>
+
+    <!-- 状态栏 -->
+    <div class="status-bar" id="statusBar">
+        <span class="green">你的回合 (X)</span>
+    </div>
+</div>
+
+<!-- AI 强度设置弹窗 -->
+<div class="modal-overlay" id="aiModal">
+    <div class="modal">
+        <h2>AI 强度</h2>
+        <div class="current-value" id="aiValue">9</div>
+        <div class="slider-container" id="sliderContainer">
+            <div class="slider-track">
+                <div class="slider-fill" id="sliderFill"></div>
+            </div>
+            <div class="slider-thumb" id="sliderThumb"></div>
+        </div>
+        <div class="slider-labels">
+            <span>0</span>
+            <span>9</span>
+        </div>
+        <div class="slider-desc" id="sliderDesc">最强模式 — 完美棋力</div>
+        <button class="modal-close-btn" id="modalCloseBtn">确定</button>
+    </div>
+</div>
+
+<!-- 隐藏的文件上传 -->
+<input type="file" class="bg-upload" id="bgUpload" accept="image/*">
+
+<script>
+// ========== 游戏状态 ==========
+const BOARD_SIZE = 3;
+let board = [];
+let gameOver = false;
+let playerTurn = true;
+let winner = null;
+let aiDepth = 9;
+let bgImage = null;
+let gameMode = 'pve'; // 'pve' = 人机, 'pvp' = 双人
+
+// ========== DOM 引用 ==========
+const boardEl = document.getElementById('board');
+const statusBar = document.getElementById('statusBar');
+const aiInfo = document.getElementById('aiInfo');
+const modeIndicator = document.getElementById('modeIndicator');
+const menuBtn = document.getElementById('menuBtn');
+const dropdown = document.getElementById('dropdown');
+const aiModal = document.getElementById('aiModal');
+const aiValue = document.getElementById('aiValue');
+const sliderFill = document.getElementById('sliderFill');
+const sliderThumb = document.getElementById('sliderThumb');
+const sliderDesc = document.getElementById('sliderDesc');
+const sliderContainer = document.getElementById('sliderContainer');
+const modalCloseBtn = document.getElementById('modalCloseBtn');
+const bgUpload = document.getElementById('bgUpload');
+
+// ========== 游戏逻辑 ==========
+function initBoard() {
+    board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(''));
+    gameOver = false;
+    playerTurn = true;
+    winner = null;
+    renderBoard();
+    updateStatus();
+}
+
+function checkWin() {
+    for (let i = 0; i < BOARD_SIZE; i++) {
+        if (board[i][0] && board[i][0] === board[i][1] && board[i][1] === board[i][2])
+            return { winner: board[i][0], line: [[i, 0], [i, 1], [i, 2]] };
+    }
+    for (let j = 0; j < BOARD_SIZE; j++) {
+        if (board[0][j] && board[0][j] === board[1][j] && board[1][j] === board[2][j])
+            return { winner: board[0][j], line: [[0, j], [1, j], [2, j]] };
+    }
+    if (board[0][0] && board[0][0] === board[1][1] && board[1][1] === board[2][2])
+        return { winner: board[0][0], line: [[0, 0], [1, 1], [2, 2]] };
+    if (board[0][2] && board[0][2] === board[1][1] && board[1][1] === board[2][0])
+        return { winner: board[0][2], line: [[0, 2], [1, 1], [2, 0]] };
+    return null;
+}
+
+function isDraw() {
+    for (let i = 0; i < BOARD_SIZE; i++)
+        for (let j = 0; j < BOARD_SIZE; j++)
+            if (!board[i][j]) return false;
+    return !checkWin();
+}
+
+// ========== Minimax AI ==========
+function evaluate() {
+    const result = checkWin();
+    if (result) return result.winner === 'O' ? 10 : -10;
+    return 0;
+}
+
+function minimax(depth, isMax) {
+    const score = evaluate();
+    if (score === 10 || score === -10) return score;
+    if (isDraw()) return 0;
+    if (depth >= aiDepth) return 0;
+
+    if (isMax) {
+        let best = -1000;
+        for (let i = 0; i < BOARD_SIZE; i++)
+            for (let j = 0; j < BOARD_SIZE; j++)
+                if (!board[i][j]) {
+                    board[i][j] = 'O';
+                    best = Math.max(best, minimax(depth + 1, false));
+                    board[i][j] = '';
+                }
+        return best;
+    } else {
+        let best = 1000;
+        for (let i = 0; i < BOARD_SIZE; i++)
+            for (let j = 0; j < BOARD_SIZE; j++)
+                if (!board[i][j]) {
+                    board[i][j] = 'X';
+                    best = Math.min(best, minimax(depth + 1, true));
+                    board[i][j] = '';
+                }
+        return best;
+    }
+}
+
+function computerMove() {
+    if (aiDepth === 0) {
+        const empty = [];
+        for (let i = 0; i < BOARD_SIZE; i++)
+            for (let j = 0; j < BOARD_SIZE; j++)
+                if (!board[i][j]) empty.push([i, j]);
+        if (empty.length > 0) {
+            const [r, c] = empty[Math.floor(Math.random() * empty.length)];
+            board[r][c] = 'O';
+        }
+        return;
+    }
+
+    let bestVal = -1000, bestMove = null;
+    for (let i = 0; i < BOARD_SIZE; i++)
+        for (let j = 0; j < BOARD_SIZE; j++)
+            if (!board[i][j]) {
+                board[i][j] = 'O';
+                const moveVal = minimax(0, false);
+                board[i][j] = '';
+                if (moveVal > bestVal) { bestVal = moveVal; bestMove = [i, j]; }
+            }
+    if (bestMove) board[bestMove[0]][bestMove[1]] = 'O';
+}
+
+// ========== 渲染 ==========
+function renderBoard() {
+    // 棋盘大背景
+    let bgEl = boardEl.querySelector('.board-bg');
+    if (!bgEl) {
+        bgEl = document.createElement('div');
+        bgEl.className = 'board-bg';
+        boardEl.appendChild(bgEl);
+    }
+    if (bgImage) {
+        bgEl.style.backgroundImage = `url(${bgImage})`;
+    } else {
+        bgEl.style.backgroundImage = '';
+    }
+
+    boardEl.innerHTML = '';
+    // 重新添加背景层（在格子之前）
+    if (bgImage) {
+        const newBg = document.createElement('div');
+        newBg.className = 'board-bg';
+        newBg.style.backgroundImage = `url(${bgImage})`;
+        boardEl.appendChild(newBg);
+    }
+
+    for (let i = 0; i < BOARD_SIZE; i++) {
+        for (let j = 0; j < BOARD_SIZE; j++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            if (gameOver) cell.classList.add('game-over');
+            if (board[i][j]) cell.classList.add('taken');
+            cell.dataset.row = i;
+            cell.dataset.col = j;
+
+            if (board[i][j] === 'X') {
+                cell.innerHTML = `<svg class="x-mark" viewBox="0 0 100 100">
+                    <line x1="20" y1="20" x2="80" y2="80"/>
+                    <line x1="80" y1="20" x2="20" y2="80"/>
+                </svg>`;
+            } else if (board[i][j] === 'O') {
+                cell.innerHTML = `<svg class="o-mark" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="30"/>
+                </svg>`;
+            }
+
+            // 胜利高亮
+            if (gameOver && winner) {
+                const winResult = checkWin();
+                if (winResult && winResult.line.some(([r, c]) => r === i && c === j)) {
+                    cell.style.background = 'rgba(0, 230, 118, 0.12)';
+                }
+            }
+
+            cell.addEventListener('click', () => onCellClick(i, j));
+            boardEl.appendChild(cell);
+        }
+    }
+}
+
+function updateStatus() {
+    if (gameOver) {
+        if (winner === 'X') {
+            statusBar.innerHTML = gameMode === 'pvp'
+                ? '<span class="green">👤 X 赢了！点击棋盘重新开始</span>'
+                : '<span class="green">你赢了！点击棋盘重新开始</span>';
+        } else if (winner === 'O') {
+            statusBar.innerHTML = gameMode === 'pvp'
+                ? '<span class="red">👤 O 赢了！点击棋盘重新开始</span>'
+                : '<span class="red">AI 赢了！点击棋盘重新开始</span>';
+        } else {
+            statusBar.innerHTML = '<span class="gold">平局！点击棋盘重新开始</span>';
+        }
+    } else {
+        if (gameMode === 'pvp') {
+            if (playerTurn) statusBar.innerHTML = '<span class="green">👤 X 的回合</span>';
+            else statusBar.innerHTML = '<span class="red">👤 O 的回合</span>';
+        } else {
+            if (playerTurn) statusBar.innerHTML = '<span class="green">你的回合 (X)</span>';
+            else statusBar.innerHTML = '<span class="red">AI 思考中...</span>';
+        }
+    }
+}
+
+// ========== 交互 ==========
+function onCellClick(row, col) {
+    if (gameOver) {
+        initBoard();
+        return;
+    }
+    if (board[row][col]) return;
+
+    if (gameMode === 'pvp') {
+        // 双人模式：轮流下 X 和 O
+        board[row][col] = playerTurn ? 'X' : 'O';
+        renderBoard();
+
+        const result = checkWin();
+        if (result) { gameOver = true; winner = result.winner; renderBoard(); updateStatus(); return; }
+        if (isDraw()) { gameOver = true; renderBoard(); updateStatus(); return; }
+
+        playerTurn = !playerTurn;
+        updateStatus();
+    } else {
+        // 人机模式：玩家只能下 X
+        if (!playerTurn) return;
+        board[row][col] = 'X';
+        renderBoard();
+
+        const result = checkWin();
+        if (result) { gameOver = true; winner = result.winner; renderBoard(); updateStatus(); return; }
+        if (isDraw()) { gameOver = true; renderBoard(); updateStatus(); return; }
+
+        playerTurn = false;
+        updateStatus();
+
+        // AI 走
+        setTimeout(() => {
+            computerMove();
+            renderBoard();
+            const r2 = checkWin();
+            if (r2) { gameOver = true; winner = r2.winner; renderBoard(); updateStatus(); return; }
+            if (isDraw()) { gameOver = true; renderBoard(); updateStatus(); return; }
+            playerTurn = true;
+            updateStatus();
+        }, 100);
+    }
+}
+
+// ========== 模式切换 ==========
+function toggleGameMode() {
+    gameMode = gameMode === 'pve' ? 'pvp' : 'pve';
+    modeIndicator.textContent = gameMode === 'pve' ? '🤖 人机' : '👥 双人';
+    // 切换模式时重置游戏
+    initBoard();
+}
+
+// ========== 菜单 ==========
+menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle('show');
+});
+
+document.addEventListener('click', () => dropdown.classList.remove('show'));
+
+dropdown.addEventListener('click', (e) => {
+    const item = e.target.closest('.dropdown-item');
+    if (!item) return;
+    dropdown.classList.remove('show');
+    const action = item.dataset.action;
+    if (action === 'mode') toggleGameMode();
+    else if (action === 'ai') openAiModal();
+    else if (action === 'bg') bgUpload.click();
+});
+
+// ========== AI 强度弹窗 ==========
+function openAiModal() {
+    updateSliderUI();
+    aiModal.classList.add('show');
+}
+
+function closeAiModal() {
+    aiModal.classList.remove('show');
+}
+
+function updateSliderUI() {
+    const pct = (aiDepth / 9) * 100;
+    sliderFill.style.width = pct + '%';
+    sliderThumb.style.left = `calc(10px + ${pct}% * 0.8)`;
+    aiValue.textContent = aiDepth;
+    aiInfo.textContent = `AI: ${aiDepth}`;
+
+    const descs = [
+        '纯随机 — AI 乱走',
+        '几乎随机 — 偶尔聪明',
+        '很弱 — 新手水平',
+        '较弱 — 入门水平',
+        '中等 — 普通玩家',
+        '中上 — 有经验玩家',
+        '较强 — 高手水平',
+        '很强 — 接近完美',
+        '极强 — 几乎不败',
+        '最强 — 完美棋力'
+    ];
+    sliderDesc.textContent = descs[aiDepth] || '';
+}
+
+// 滑块拖动
+let isDragging = false;
+
+sliderContainer.addEventListener('mousedown', (e) => {
+    const thumb = e.target.closest('.slider-thumb');
+    if (thumb) { isDragging = true; updateSliderFromEvent(e); }
+    else {
+        const rect = sliderContainer.getBoundingClientRect();
+        const x = e.clientX - rect.left - 10;
+        const w = rect.width - 20;
+        const val = Math.round((x / w) * 9);
+        if (val >= 0 && val <= 9) { aiDepth = val; updateSliderUI(); }
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (isDragging) updateSliderFromEvent(e);
+});
+
+document.addEventListener('mouseup', () => { isDragging = false; });
+
+function updateSliderFromEvent(e) {
+    const rect = sliderContainer.getBoundingClientRect();
+    const x = e.clientX - rect.left - 10;
+    const w = rect.width - 20;
+    let val = Math.round((x / w) * 9);
+    val = Math.max(0, Math.min(9, val));
+    if (val !== aiDepth) { aiDepth = val; updateSliderUI(); }
+}
+
+modalCloseBtn.addEventListener('click', closeAiModal);
+aiModal.addEventListener('click', (e) => {
+    if (e.target === aiModal) closeAiModal();
+});
+
+// ========== 背景图片 ==========
+bgUpload.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        bgImage = ev.target.result;
+        renderBoard();
+    };
+    reader.readAsDataURL(file);
+    bgUpload.value = '';
+});
+
+// ========== 启动 ==========
+initBoard();
+</script>
+</body>
+</html>
